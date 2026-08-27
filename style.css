@@ -12,6 +12,18 @@
     --radius-sm: 4px;
 }
 
+:root[data-theme="dark"] {
+    --bg: #191919;
+    --bg-sunk: #232323;
+    --ink: #E9E9E7;
+    --ink-soft: #8A8985;
+    --line: #2F2F2F;
+    --line-strong: #3D3D3D;
+    --card-bg: #202020;
+    --card-hover-shadow: rgba(0, 0, 0, 0.35);
+    --accent: #4DA3FF;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -24,6 +36,10 @@ body {
     color: var(--ink);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
+}
+
+body {
+    transition: background-color .15s ease, color .15s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -52,6 +68,7 @@ header {
     gap: 16px;
     flex-wrap: wrap;
     border-bottom: 1px solid var(--line);
+    transition: border-color .15s ease;
 }
 
 .title-wrap {
@@ -72,13 +89,47 @@ header {
     color: var(--ink);
     padding: 3px 6px;
     border-radius: var(--radius-sm);
-    max-width: 100%;
-    width: 100%;
+    max-width: 50%;
+    width: 50%;
 }
 
 #board-title:hover,
 #board-title:focus {
     background: var(--bg-sunk);
+}
+
+.theme-toggle {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: background-color .12s ease, color .12s ease, border-color .12s ease;
+}
+
+.theme-toggle:hover {
+    background: var(--bg-sunk);
+    color: var(--ink);
+}
+
+.theme-toggle .icon-sun,
+.theme-toggle .icon-moon {
+    display: none;
+}
+
+:root[data-theme="light"] .theme-toggle .icon-moon {
+    display: block;
+}
+
+:root[data-theme="dark"] .theme-toggle .icon-sun {
+    display: block;
 }
 
 /* ---------- Board ---------- */
@@ -201,7 +252,7 @@ header {
     font-size: 14px;
     line-height: 1.45;
     cursor: grab;
-    transition: box-shadow .12s ease, border-color .12s ease;
+    transition: box-shadow .12s ease, border-color .12s ease, background-color .15s ease;
     word-wrap: break-word;
     white-space: pre-wrap;
 }

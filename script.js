@@ -1,6 +1,23 @@
 (function () {
   "use strict";
 
+  var THEME_KEY = "trello-lite-theme";
+  var themeToggle = document.getElementById("theme-toggle");
+
+  function currentTheme() {
+    return document.documentElement.getAttribute("data-theme") === "dark"
+      ? "dark"
+      : "light";
+  }
+
+  themeToggle.addEventListener("click", function () {
+    var next = currentTheme() === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (e) {}
+  });
+
   var STORAGE_KEY = "trello-lite-board-v1";
   var ACCENTS = ["#2383E2", "#0F7B6C", "#D9730D", "#9065B0", "#E03E3E"];
 
