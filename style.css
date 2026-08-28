@@ -93,8 +93,8 @@ header {
     color: var(--ink);
     padding: 3px 6px;
     border-radius: var(--radius-sm);
-    max-width: 100%;
-    width: 100%;
+    max-width: 40%;
+    width: 40%;
 }
 
 #board-title:hover,
