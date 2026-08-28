@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  /* ---------- Tema ---------- */
+
   var THEME_KEY = "trello-lite-theme";
   var themeToggle = document.getElementById("theme-toggle");
 
@@ -18,8 +20,13 @@
     } catch (e) {}
   });
 
+  /* ---------- Estado ---------- */
+
   var STORAGE_KEY = "trello-lite-board-v1";
   var ACCENTS = ["#2383E2", "#0F7B6C", "#D9730D", "#9065B0", "#E03E3E"];
+  var DRAG_THRESHOLD = 8; // px de movimiento antes de considerarlo un arrastre
+  var EDGE_ZONE = 46; // px desde el borde de #board donde arranca el auto-scroll
+  var EDGE_SPEED = 14; // px por frame al hacer auto-scroll
 
   var defaultBoard = function () {
     return {
@@ -30,8 +37,8 @@
           title: "Por hacer",
           color: ACCENTS[0],
           cards: [
-            { id: uid(), text: "Arrastrá las tarjetas entre columnas" },
-            { id: uid(), text: "Hacé click en una tarjeta para editarla" },
+            { id: uid(), text: "Mantené presionada una tarjeta para moverla" },
+            { id: uid(), text: "Tocá una tarjeta para editarla" },
           ],
         },
         { id: uid(), title: "En progreso", color: ACCENTS[1], cards: [] },
@@ -68,6 +75,7 @@
   var board = loadBoard();
   var boardEl = document.getElementById("board");
   var titleInput = document.getElementById("board-title");
+  var dotsEl = document.getElementById("page-dots");
 
   titleInput.value = board.title || "Mi tablero";
   titleInput.addEventListener("input", function () {
@@ -75,11 +83,7 @@
     saveBoard();
   });
 
-  // ---------- render ----------
-
-  var dragCardId = null;
-  var dragFromCol = null;
-  var dragColId = null;
+  /* ---------- Render ---------- */
 
   function render() {
     boardEl.innerHTML = "";
@@ -92,8 +96,13 @@
       // header
       var headerEl = document.createElement("div");
       headerEl.className = "col-header";
-      headerEl.draggable = true;
       headerEl.dataset.colId = col.id;
+
+      var handle = document.createElement("span");
+      handle.className = "col-handle";
+      handle.title = "Arrastrar para reordenar";
+      handle.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="6" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg>';
 
       var dot = document.createElement("span");
       dot.className = "dot";
@@ -109,9 +118,6 @@
       colTitle.addEventListener("input", function () {
         col.title = colTitle.value;
         saveBoard();
-      });
-      colTitle.addEventListener("mousedown", function (e) {
-        e.stopPropagation();
       });
 
       var colCount = document.createElement("span");
@@ -139,27 +145,22 @@
         }
       });
 
+      headerEl.appendChild(handle);
       headerEl.appendChild(dot);
       headerEl.appendChild(colTitle);
       headerEl.appendChild(colCount);
       headerEl.appendChild(colDel);
 
-      headerEl.addEventListener("dragstart", function (e) {
-        dragColId = col.id;
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", "col:" + col.id);
-      });
-      headerEl.addEventListener("dragend", function () {
-        dragColId = null;
-        render();
-      });
+      bindColumnDrag(handle, col.id);
 
       // body / cards
       var body = document.createElement("div");
       body.className = "col-body";
+      body.dataset.colId = col.id;
 
       var cardsWrap = document.createElement("div");
       cardsWrap.className = "cards";
+      cardsWrap.dataset.colId = col.id;
 
       col.cards.forEach(function (card, cardIndex) {
         cardsWrap.appendChild(renderCard(card, col, cardIndex));
@@ -196,77 +197,8 @@
       form.appendChild(row);
       body.appendChild(form);
 
-      // dnd targets on the column body
-      body.addEventListener("dragover", function (e) {
-        if (dragCardId == null) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        var placeholder = ensurePlaceholder(cardsWrap);
-        var after = getCardAfterY(cardsWrap, e.clientY);
-        if (after == null) {
-          cardsWrap.appendChild(placeholder);
-        } else {
-          cardsWrap.insertBefore(placeholder, after);
-        }
-      });
-      body.addEventListener("dragleave", function (e) {
-        if (e.target === body) {
-          removePlaceholder(cardsWrap);
-        }
-      });
-      body.addEventListener("drop", function (e) {
-        if (dragCardId == null) return;
-        e.preventDefault();
-        var placeholder = cardsWrap.querySelector(".drop-placeholder");
-        var index = placeholder
-          ? Array.prototype.indexOf.call(cardsWrap.children, placeholder)
-          : col.cards.length;
-
-        var fromCol = board.columns.find(function (c) {
-          return c.id === dragFromCol;
-        });
-        var cardObj = fromCol.cards.find(function (c) {
-          return c.id === dragCardId;
-        });
-        if (!cardObj) return;
-
-        fromCol.cards = fromCol.cards.filter(function (c) {
-          return c.id !== dragCardId;
-        });
-        if (fromCol.id === col.id && index > fromCol.cards.length)
-          index = fromCol.cards.length;
-        col.cards.splice(Math.min(index, col.cards.length), 0, cardObj);
-
-        dragCardId = null;
-        dragFromCol = null;
-        saveBoard();
-        render();
-      });
-
       colEl.appendChild(headerEl);
       colEl.appendChild(body);
-
-      // column reorder drop zone (drop on the column itself, outside cards)
-      colEl.addEventListener("dragover", function (e) {
-        if (dragColId == null || dragColId === col.id) return;
-        e.preventDefault();
-      });
-      colEl.addEventListener("drop", function (e) {
-        if (dragColId == null || dragColId === col.id) return;
-        e.preventDefault();
-        var fromIndex = board.columns.findIndex(function (c) {
-          return c.id === dragColId;
-        });
-        var toIndex = board.columns.findIndex(function (c) {
-          return c.id === col.id;
-        });
-        var moved = board.columns.splice(fromIndex, 1)[0];
-        board.columns.splice(toIndex, 0, moved);
-        dragColId = null;
-        saveBoard();
-        render();
-      });
-
       boardEl.appendChild(colEl);
     });
 
@@ -294,13 +226,14 @@
     });
     newColWrap.appendChild(newColBtn);
     boardEl.appendChild(newColWrap);
+
+    renderDots();
   }
 
   function renderCard(card, col, cardIndex) {
     var el = document.createElement("div");
     el.className = "card";
     el.dataset.cardId = card.id;
-    el.draggable = true;
 
     var textEl = document.createElement("div");
     textEl.className = "card-text";
@@ -319,26 +252,7 @@
     });
     el.appendChild(delBtn);
 
-    el.addEventListener("click", function (e) {
-      if (e.target === delBtn) return;
-      startEdit(el, card, col);
-    });
-
-    el.addEventListener("dragstart", function (e) {
-      dragCardId = card.id;
-      dragFromCol = col.id;
-      el.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", "card:" + card.id);
-    });
-    el.addEventListener("dragend", function () {
-      dragCardId = null;
-      dragFromCol = null;
-      document.querySelectorAll(".drop-placeholder").forEach(function (p) {
-        p.remove();
-      });
-      render();
-    });
+    bindCardDrag(el, delBtn, card, col);
 
     return el;
   }
@@ -346,11 +260,11 @@
   function startEdit(el, card, col) {
     if (el.querySelector("textarea")) return;
     var textEl = el.querySelector(".card-text");
+    if (!textEl) return;
     var textarea = document.createElement("textarea");
     textarea.value = card.text;
     textarea.rows = Math.max(2, Math.ceil(card.text.length / 24));
     el.replaceChild(textarea, textEl);
-    el.draggable = false;
     textarea.focus();
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
@@ -373,6 +287,60 @@
     });
   }
 
+  /* ---------- Paginación (móvil) ---------- */
+
+  function renderDots() {
+    dotsEl.innerHTML = "";
+    if (board.columns.length < 2) return;
+    board.columns.forEach(function (col, i) {
+      var d = document.createElement("span");
+      d.className = "page-dot" + (i === 0 ? " active" : "");
+      d.dataset.index = i;
+      d.addEventListener("click", function () {
+        var target = boardEl.children[i];
+        if (target)
+          target.scrollIntoView({
+            behavior: "smooth",
+            inline: "start",
+            block: "nearest",
+          });
+      });
+      dotsEl.appendChild(d);
+    });
+  }
+
+  var dotsTicking = false;
+  boardEl.addEventListener("scroll", function () {
+    if (dotsTicking) return;
+    dotsTicking = true;
+    requestAnimationFrame(function () {
+      updateActiveDot();
+      dotsTicking = false;
+    });
+  });
+
+  function updateActiveDot() {
+    var dots = dotsEl.querySelectorAll(".page-dot");
+    if (!dots.length) return;
+    var columns = boardEl.querySelectorAll(".column");
+    var boardCenter = boardEl.scrollLeft + boardEl.clientWidth / 2;
+    var closest = 0;
+    var closestDist = Infinity;
+    columns.forEach(function (colEl, i) {
+      var center = colEl.offsetLeft + colEl.offsetWidth / 2;
+      var dist = Math.abs(center - boardCenter);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = i;
+      }
+    });
+    dots.forEach(function (d, i) {
+      d.classList.toggle("active", i === closest);
+    });
+  }
+
+  /* ---------- Utilidades compartidas de drag ---------- */
+
   function ensurePlaceholder(cardsWrap) {
     var existing = cardsWrap.querySelector(".drop-placeholder");
     if (existing) return existing;
@@ -383,14 +351,13 @@
     cardsWrap.appendChild(p);
     return p;
   }
-  function removePlaceholder(cardsWrap) {
-    var existing = cardsWrap.querySelector(".drop-placeholder");
-    if (existing) existing.remove();
+  function removeAllPlaceholders() {
+    document.querySelectorAll(".drop-placeholder").forEach(function (p) {
+      p.remove();
+    });
   }
   function getCardAfterY(cardsWrap, y) {
-    var els = Array.prototype.slice.call(
-      cardsWrap.querySelectorAll(".card:not(.dragging)"),
-    );
+    var els = Array.prototype.slice.call(cardsWrap.querySelectorAll(".card"));
     var result = null;
     var closestOffset = -Infinity;
     els.forEach(function (child) {
@@ -402,6 +369,317 @@
       }
     });
     return result;
+  }
+
+  var edgeScrollRAF = null;
+  var edgeScrollDir = 0;
+  function startEdgeScrollLoop() {
+    if (edgeScrollRAF) return;
+    function step() {
+      if (edgeScrollDir !== 0) {
+        boardEl.scrollLeft += edgeScrollDir * EDGE_SPEED;
+      }
+      edgeScrollRAF = requestAnimationFrame(step);
+    }
+    edgeScrollRAF = requestAnimationFrame(step);
+  }
+  function stopEdgeScrollLoop() {
+    if (edgeScrollRAF) {
+      cancelAnimationFrame(edgeScrollRAF);
+      edgeScrollRAF = null;
+    }
+    edgeScrollDir = 0;
+  }
+  function updateEdgeScroll(clientX) {
+    var rect = boardEl.getBoundingClientRect();
+    if (clientX < rect.left + EDGE_ZONE) edgeScrollDir = -1;
+    else if (clientX > rect.right - EDGE_ZONE) edgeScrollDir = 1;
+    else edgeScrollDir = 0;
+  }
+
+  /* ---------- Drag de tarjetas (Pointer Events, funciona con mouse y táctil) ---------- */
+
+  function bindCardDrag(cardEl, delBtn, card, col) {
+    var pointerId = null;
+    var startX = 0,
+      startY = 0;
+    var dragging = false;
+    var ghost = null;
+    var ghostOffsetX = 0,
+      ghostOffsetY = 0;
+    var sourceColId = null;
+    var targetColId = null;
+
+    cardEl.addEventListener("pointerdown", function (e) {
+      if (e.target === delBtn || delBtn.contains(e.target)) return;
+      if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse")
+        return;
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
+      dragging = false;
+      sourceColId = col.id;
+      try {
+        cardEl.setPointerCapture(pointerId);
+      } catch (err) {}
+    });
+
+    cardEl.addEventListener("pointermove", function (e) {
+      if (e.pointerId !== pointerId) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+
+      if (!dragging) {
+        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD)
+          return;
+        dragging = true;
+        beginDrag(e);
+      }
+      moveDrag(e);
+    });
+
+    cardEl.addEventListener("pointerup", function (e) {
+      if (e.pointerId !== pointerId) return;
+      if (dragging) {
+        endDrag();
+      } else {
+        startEdit(cardEl, card, col);
+      }
+      pointerId = null;
+    });
+
+    cardEl.addEventListener("pointercancel", function (e) {
+      if (e.pointerId !== pointerId) return;
+      if (dragging) cancelDrag();
+      pointerId = null;
+    });
+
+    function beginDrag(e) {
+      var rect = cardEl.getBoundingClientRect();
+      ghostOffsetX = e.clientX - rect.left;
+      ghostOffsetY = e.clientY - rect.top;
+
+      ghost = cardEl.cloneNode(true);
+      ghost.classList.add("card-ghost");
+      ghost.classList.remove("card");
+      ghost.style.width = rect.width + "px";
+      ghost.style.left = rect.left + "px";
+      ghost.style.top = rect.top + "px";
+      var ghostDel = ghost.querySelector(".card-del");
+      if (ghostDel) ghostDel.remove();
+      document.body.appendChild(ghost);
+
+      cardEl.classList.add("dragging");
+      targetColId = sourceColId;
+      startEdgeScrollLoop();
+    }
+
+    function moveDrag(e) {
+      if (!ghost) return;
+      ghost.style.left = e.clientX - ghostOffsetX + "px";
+      ghost.style.top = e.clientY - ghostOffsetY + "px";
+
+      updateEdgeScroll(e.clientX);
+
+      var elUnder = document.elementFromPoint(e.clientX, e.clientY);
+      var cardsWrap = elUnder ? elUnder.closest(".cards") : null;
+      if (!cardsWrap) {
+        var colBody = elUnder ? elUnder.closest(".col-body") : null;
+        if (colBody) cardsWrap = colBody.querySelector(".cards");
+      }
+      if (!cardsWrap) return;
+
+      targetColId = cardsWrap.dataset.colId;
+      removeAllPlaceholders();
+      var placeholder = ensurePlaceholder(cardsWrap);
+      var after = getCardAfterY(cardsWrap, e.clientY);
+      if (after == null) cardsWrap.appendChild(placeholder);
+      else cardsWrap.insertBefore(placeholder, after);
+    }
+
+    function endDrag() {
+      stopEdgeScrollLoop();
+      var placeholder = document.querySelector(".drop-placeholder");
+      var targetCol = board.columns.find(function (c) {
+        return c.id === targetColId;
+      });
+      var fromCol = board.columns.find(function (c) {
+        return c.id === sourceColId;
+      });
+
+      if (placeholder && targetCol && fromCol) {
+        var cardsWrap = placeholder.parentElement;
+        var index = Array.prototype.indexOf.call(
+          cardsWrap.children,
+          placeholder,
+        );
+        var cardObj = fromCol.cards.find(function (c) {
+          return c.id === card.id;
+        });
+        if (cardObj) {
+          fromCol.cards = fromCol.cards.filter(function (c) {
+            return c.id !== card.id;
+          });
+          if (fromCol.id === targetCol.id && index > fromCol.cards.length)
+            index = fromCol.cards.length;
+          targetCol.cards.splice(
+            Math.min(index, targetCol.cards.length),
+            0,
+            cardObj,
+          );
+          saveBoard();
+        }
+      }
+      cleanupDrag();
+      render();
+    }
+
+    function cancelDrag() {
+      stopEdgeScrollLoop();
+      cleanupDrag();
+    }
+
+    function cleanupDrag() {
+      if (ghost) {
+        ghost.remove();
+        ghost = null;
+      }
+      cardEl.classList.remove("dragging");
+      removeAllPlaceholders();
+      dragging = false;
+    }
+  }
+
+  /* ---------- Drag de columnas (desde el handle) ---------- */
+
+  function bindColumnDrag(handleEl, colId) {
+    var pointerId = null;
+    var startX = 0,
+      startY = 0;
+    var dragging = false;
+    var ghost = null;
+    var ghostOffsetX = 0,
+      ghostOffsetY = 0;
+    var colEl = null;
+
+    handleEl.addEventListener("pointerdown", function (e) {
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
+      dragging = false;
+      colEl = handleEl.closest(".column");
+      try {
+        handleEl.setPointerCapture(pointerId);
+      } catch (err) {}
+    });
+
+    handleEl.addEventListener("pointermove", function (e) {
+      if (e.pointerId !== pointerId) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      if (!dragging) {
+        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD)
+          return;
+        dragging = true;
+        beginDrag(e);
+      }
+      moveDrag(e);
+    });
+
+    handleEl.addEventListener("pointerup", function (e) {
+      if (e.pointerId !== pointerId) return;
+      if (dragging) endDrag();
+      pointerId = null;
+    });
+
+    handleEl.addEventListener("pointercancel", function (e) {
+      if (e.pointerId !== pointerId) return;
+      if (dragging) cancelDrag();
+      pointerId = null;
+    });
+
+    function beginDrag(e) {
+      var rect = colEl.getBoundingClientRect();
+      ghostOffsetX = e.clientX - rect.left;
+      ghostOffsetY = e.clientY - rect.top;
+
+      ghost = document.createElement("div");
+      ghost.style.position = "fixed";
+      ghost.style.zIndex = "999";
+      ghost.style.pointerEvents = "none";
+      ghost.style.left = rect.left + "px";
+      ghost.style.top = rect.top + "px";
+      ghost.style.width = rect.width + "px";
+      ghost.style.height = Math.min(rect.height, 120) + "px";
+      ghost.style.borderRadius = "8px";
+      ghost.style.background = "var(--bg-sunk)";
+      ghost.style.border = "1px solid var(--line-strong)";
+      ghost.style.boxShadow = "0 8px 24px rgba(0,0,0,0.18)";
+      ghost.style.opacity = "0.9";
+      document.body.appendChild(ghost);
+
+      colEl.classList.add("col-dragging");
+      startEdgeScrollLoop();
+    }
+
+    function moveDrag(e) {
+      if (!ghost) return;
+      ghost.style.left = e.clientX - ghostOffsetX + "px";
+      ghost.style.top = e.clientY - ghostOffsetY + "px";
+
+      updateEdgeScroll(e.clientX);
+
+      var elUnder = document.elementFromPoint(e.clientX, e.clientY);
+      var overCol = elUnder ? elUnder.closest(".column") : null;
+      document.querySelectorAll(".column").forEach(function (c) {
+        c.classList.remove("drag-over-col");
+      });
+      if (overCol && overCol !== colEl) {
+        overCol.classList.add("drag-over-col");
+      }
+    }
+
+    function endDrag() {
+      stopEdgeScrollLoop();
+      var elUnder = ghost
+        ? document.elementFromPoint(
+            parseFloat(ghost.style.left) + ghostOffsetX,
+            parseFloat(ghost.style.top) + ghostOffsetY,
+          )
+        : null;
+      var overCol = elUnder ? elUnder.closest(".column") : null;
+
+      if (overCol && overCol.dataset.colId !== colId) {
+        var fromIndex = board.columns.findIndex(function (c) {
+          return c.id === colId;
+        });
+        var toIndex = board.columns.findIndex(function (c) {
+          return c.id === overCol.dataset.colId;
+        });
+        var moved = board.columns.splice(fromIndex, 1)[0];
+        board.columns.splice(toIndex, 0, moved);
+        saveBoard();
+      }
+      cleanupDrag();
+      render();
+    }
+
+    function cancelDrag() {
+      stopEdgeScrollLoop();
+      cleanupDrag();
+    }
+
+    function cleanupDrag() {
+      if (ghost) {
+        ghost.remove();
+        ghost = null;
+      }
+      if (colEl) colEl.classList.remove("col-dragging");
+      document.querySelectorAll(".column").forEach(function (c) {
+        c.classList.remove("drag-over-col");
+      });
+      dragging = false;
+    }
   }
 
   render();
