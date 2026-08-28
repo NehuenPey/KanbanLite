@@ -25,8 +25,9 @@
   var STORAGE_KEY = "trello-lite-board-v1";
   var ACCENTS = ["#2383E2", "#0F7B6C", "#D9730D", "#9065B0", "#E03E3E"];
   var DRAG_THRESHOLD = 8; // px de movimiento antes de considerarlo un arrastre
-  var EDGE_ZONE = 46; // px desde el borde de #board donde arranca el auto-scroll
-  var EDGE_SPEED = 14; // px por frame al hacer auto-scroll
+  var EDGE_ZONE = 70; // px desde el borde de #board donde arranca el auto-scroll
+  var EDGE_MIN_SPEED = 6; // px por frame al borde de la zona
+  var EDGE_MAX_SPEED = 26; // px por frame pegado al borde de la pantalla
 
   var defaultBoard = function () {
     return {
@@ -181,19 +182,47 @@
       var row = document.createElement("div");
       row.className = "add-card-row";
       var plus = document.createElement("span");
+      plus.className = "add-card-plus";
       plus.textContent = "+";
       var input = document.createElement("input");
       input.className = "add-card-input";
       input.placeholder = "Agregar tarjeta";
+      input.setAttribute("enterkeyhint", "done");
+      input.setAttribute("autocomplete", "off");
+
+      var submitBtn = document.createElement("button");
+      submitBtn.type = "button";
+      submitBtn.className = "add-card-submit";
+      submitBtn.title = "Agregar tarjeta";
+      submitBtn.setAttribute("aria-label", "Agregar tarjeta");
+      submitBtn.innerHTML =
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>';
+
+      function commitNewCard() {
+        var v = input.value.trim();
+        if (!v) return;
+        col.cards.push({ id: uid(), text: v });
+        saveBoard();
+        render();
+      }
+
       input.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && input.value.trim()) {
-          col.cards.push({ id: uid(), text: input.value.trim() });
-          saveBoard();
-          render();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitNewCard();
         }
       });
+      submitBtn.addEventListener("click", function () {
+        commitNewCard();
+        input.focus();
+      });
+      input.addEventListener("input", function () {
+        row.classList.toggle("has-text", input.value.trim().length > 0);
+      });
+
       row.appendChild(plus);
       row.appendChild(input);
+      row.appendChild(submitBtn);
       form.appendChild(row);
       body.appendChild(form);
 
@@ -373,11 +402,24 @@
 
   var edgeScrollRAF = null;
   var edgeScrollDir = 0;
+  var edgeScrollSpeed = 0;
+  var snapLockCount = 0;
+
+  function lockSnap() {
+    snapLockCount++;
+    boardEl.style.scrollSnapType = "none";
+  }
+  function unlockSnap() {
+    snapLockCount = Math.max(0, snapLockCount - 1);
+    if (snapLockCount === 0) boardEl.style.scrollSnapType = "";
+  }
+
   function startEdgeScrollLoop() {
+    lockSnap();
     if (edgeScrollRAF) return;
     function step() {
       if (edgeScrollDir !== 0) {
-        boardEl.scrollLeft += edgeScrollDir * EDGE_SPEED;
+        boardEl.scrollLeft += edgeScrollDir * edgeScrollSpeed;
       }
       edgeScrollRAF = requestAnimationFrame(step);
     }
@@ -389,12 +431,28 @@
       edgeScrollRAF = null;
     }
     edgeScrollDir = 0;
+    edgeScrollSpeed = 0;
+    unlockSnap();
   }
   function updateEdgeScroll(clientX) {
     var rect = boardEl.getBoundingClientRect();
-    if (clientX < rect.left + EDGE_ZONE) edgeScrollDir = -1;
-    else if (clientX > rect.right - EDGE_ZONE) edgeScrollDir = 1;
-    else edgeScrollDir = 0;
+    var leftDist = clientX - rect.left;
+    var rightDist = rect.right - clientX;
+
+    if (leftDist < EDGE_ZONE) {
+      edgeScrollDir = -1;
+      edgeScrollSpeed = speedForDistance(leftDist);
+    } else if (rightDist < EDGE_ZONE) {
+      edgeScrollDir = 1;
+      edgeScrollSpeed = speedForDistance(rightDist);
+    } else {
+      edgeScrollDir = 0;
+      edgeScrollSpeed = 0;
+    }
+  }
+  function speedForDistance(dist) {
+    var t = 1 - Math.max(0, Math.min(EDGE_ZONE, dist)) / EDGE_ZONE; // 0 (borde de la zona) .. 1 (pegado al borde)
+    return EDGE_MIN_SPEED + t * (EDGE_MAX_SPEED - EDGE_MIN_SPEED);
   }
 
   /* ---------- Drag de tarjetas (Pointer Events, funciona con mouse y táctil) ---------- */
@@ -435,6 +493,7 @@
         dragging = true;
         beginDrag(e);
       }
+      e.preventDefault();
       moveDrag(e);
     });
 
@@ -583,6 +642,7 @@
         dragging = true;
         beginDrag(e);
       }
+      e.preventDefault();
       moveDrag(e);
     });
 
