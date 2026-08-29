@@ -40,8 +40,10 @@ body {
 }
 
 body {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
     transition: background-color .15s ease, color .15s ease;
-    min-height: 100dvh;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -63,6 +65,7 @@ body {
 /* ---------- Header ---------- */
 
 header {
+    flex: 0 0 auto;
     padding: max(20px, env(safe-area-inset-top)) clamp(16px, 4vw, 56px) 18px;
     padding-left: max(clamp(16px, 4vw, 56px), env(safe-area-inset-left));
     padding-right: max(clamp(16px, 4vw, 56px), env(safe-area-inset-right));
@@ -93,8 +96,8 @@ header {
     color: var(--ink);
     padding: 3px 6px;
     border-radius: var(--radius-sm);
-    max-width: 40%;
-    width: 40%;
+    max-width: 100%;
+    width: 100%;
 }
 
 #board-title:hover,
@@ -144,17 +147,18 @@ header {
 /* ---------- Board ---------- */
 
 #board {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 20px;
-    padding: 20px clamp(16px, 4vw, 56px) 40px;
+    padding: 20px clamp(16px, 4vw, 56px) 20px;
     padding-left: max(clamp(16px, 4vw, 56px), env(safe-area-inset-left));
     padding-right: max(clamp(16px, 4vw, 56px), env(safe-area-inset-right));
-    padding-bottom: max(40px, env(safe-area-inset-bottom));
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x proximity;
-    min-height: calc(100dvh - 100px);
     -webkit-overflow-scrolling: touch;
 }
 
@@ -163,7 +167,6 @@ header {
     flex: 0 0 280px;
     display: flex;
     flex-direction: column;
-    max-height: calc(100dvh - 150px);
 }
 
 .column.drag-over-col {
@@ -295,7 +298,7 @@ header {
     font-size: 14px;
     line-height: 1.45;
     cursor: grab;
-    touch-action: none;
+    touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -495,11 +498,12 @@ header {
 /* ---------- Indicador de página (paginación de columnas en móvil) ---------- */
 
 .page-dots {
+    flex: 0 0 auto;
     display: none;
     justify-content: center;
     align-items: center;
     gap: 7px;
-    padding: 4px 0 max(14px, env(safe-area-inset-bottom));
+    padding: 6px 0 max(12px, env(safe-area-inset-bottom));
 }
 
 .page-dots .page-dot {
@@ -546,14 +550,11 @@ header {
     #board {
         gap: 14px;
         padding-top: 14px;
-        padding-bottom: 8px;
         scroll-snap-type: x mandatory;
-        min-height: auto;
     }
 
     .column {
         flex: 0 0 90vw;
-        max-height: none;
     }
 
     .new-column {

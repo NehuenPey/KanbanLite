@@ -5,6 +5,7 @@
 
   var THEME_KEY = "trello-lite-theme";
   var themeToggle = document.getElementById("theme-toggle");
+  var metaThemeColor = document.getElementById("meta-theme-color");
 
   function currentTheme() {
     return document.documentElement.getAttribute("data-theme") === "dark"
@@ -12,9 +13,18 @@
       : "light";
   }
 
+  function applyMetaThemeColor(theme) {
+    if (metaThemeColor)
+      metaThemeColor.setAttribute(
+        "content",
+        theme === "dark" ? "#191919" : "#FFFFFF",
+      );
+  }
+
   themeToggle.addEventListener("click", function () {
     var next = currentTheme() === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
+    applyMetaThemeColor(next);
     try {
       localStorage.setItem(THEME_KEY, next);
     } catch (e) {}
@@ -24,7 +34,9 @@
 
   var STORAGE_KEY = "trello-lite-board-v1";
   var ACCENTS = ["#2383E2", "#0F7B6C", "#D9730D", "#9065B0", "#E03E3E"];
-  var DRAG_THRESHOLD = 8; // px de movimiento antes de considerarlo un arrastre
+  var DRAG_THRESHOLD = 8; // px de movimiento antes de considerarlo un arrastre (mouse/pen)
+  var TOUCH_HOLD_MS = 200; // ms de espera antes de iniciar un arrastre táctil (evita chocar con el swipe)
+  var TOUCH_CANCEL_MOVE = 10; // px: si el dedo se mueve más que esto antes del hold, se cede al scroll nativo
   var EDGE_ZONE = 70; // px desde el borde de #board donde arranca el auto-scroll
   var EDGE_MIN_SPEED = 6; // px por frame al borde de la zona
   var EDGE_MAX_SPEED = 26; // px por frame pegado al borde de la pantalla
@@ -459,9 +471,13 @@
 
   function bindCardDrag(cardEl, delBtn, card, col) {
     var pointerId = null;
+    var pointerType = "mouse";
     var startX = 0,
       startY = 0;
+    var lastX = 0,
+      lastY = 0;
     var dragging = false;
+    var holdTimer = null;
     var ghost = null;
     var ghostOffsetX = 0,
       ghostOffsetY = 0;
@@ -472,33 +488,69 @@
       if (e.target === delBtn || delBtn.contains(e.target)) return;
       if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse")
         return;
+
       pointerId = e.pointerId;
-      startX = e.clientX;
-      startY = e.clientY;
+      pointerType = e.pointerType || "mouse";
+      startX = lastX = e.clientX;
+      startY = lastY = e.clientY;
       dragging = false;
       sourceColId = col.id;
       try {
         cardEl.setPointerCapture(pointerId);
       } catch (err) {}
+
+      // En touch/pen esperamos un mantener-presionado antes de arrancar el arrastre,
+      // así un swipe rápido para cambiar de columna no queda "atrapado" por la tarjeta.
+      if (pointerType !== "mouse") {
+        clearTimeout(holdTimer);
+        holdTimer = setTimeout(function () {
+          if (pointerId == null || dragging) return;
+          dragging = true;
+          cardEl.style.touchAction = "none";
+          beginDrag({ clientX: lastX, clientY: lastY });
+          if (navigator.vibrate) {
+            try {
+              navigator.vibrate(8);
+            } catch (err) {}
+          }
+        }, TOUCH_HOLD_MS);
+      }
     });
 
     cardEl.addEventListener("pointermove", function (e) {
       if (e.pointerId !== pointerId) return;
-      var dx = e.clientX - startX;
-      var dy = e.clientY - startY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      var dx = lastX - startX;
+      var dy = lastY - startY;
 
-      if (!dragging) {
+      if (dragging) {
+        e.preventDefault();
+        moveDrag(e);
+        return;
+      }
+
+      if (pointerType === "mouse") {
         if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD)
           return;
         dragging = true;
         beginDrag(e);
+        e.preventDefault();
+        moveDrag(e);
+      } else {
+        // Todavía no pasó el hold: si se mueve de más, es un swipe -> lo dejamos scrollear nativo.
+        if (
+          Math.abs(dx) > TOUCH_CANCEL_MOVE ||
+          Math.abs(dy) > TOUCH_CANCEL_MOVE
+        ) {
+          clearTimeout(holdTimer);
+        }
       }
-      e.preventDefault();
-      moveDrag(e);
     });
 
     cardEl.addEventListener("pointerup", function (e) {
       if (e.pointerId !== pointerId) return;
+      clearTimeout(holdTimer);
       if (dragging) {
         endDrag();
       } else {
@@ -509,6 +561,7 @@
 
     cardEl.addEventListener("pointercancel", function (e) {
       if (e.pointerId !== pointerId) return;
+      clearTimeout(holdTimer);
       if (dragging) cancelDrag();
       pointerId = null;
     });
@@ -604,6 +657,7 @@
         ghost = null;
       }
       cardEl.classList.remove("dragging");
+      cardEl.style.touchAction = "";
       removeAllPlaceholders();
       dragging = false;
     }
