@@ -98,6 +98,19 @@
 
   /* ---------- Render ---------- */
 
+  function focusAndScrollColumn(colId) {
+    var colBody = boardEl.querySelector(
+      '.col-body[data-col-id="' + colId + '"]',
+    );
+    if (colBody) {
+      colBody.scrollTo({ top: colBody.scrollHeight, behavior: "smooth" });
+    }
+    var newInput = boardEl.querySelector(
+      '.column[data-col-id="' + colId + '"] .add-card-input',
+    );
+    if (newInput) newInput.focus();
+  }
+
   function render() {
     boardEl.innerHTML = "";
 
@@ -216,6 +229,7 @@
         col.cards.push({ id: uid(), text: v });
         saveBoard();
         render();
+        focusAndScrollColumn(col.id);
       }
 
       input.addEventListener("keydown", function (e) {
@@ -226,7 +240,6 @@
       });
       submitBtn.addEventListener("click", function () {
         commitNewCard();
-        input.focus();
       });
       input.addEventListener("input", function () {
         row.classList.toggle("has-text", input.value.trim().length > 0);
@@ -287,9 +300,13 @@
     delBtn.textContent = "×";
     delBtn.addEventListener("click", function (e) {
       e.stopPropagation();
-      col.cards.splice(cardIndex, 1);
-      saveBoard();
-      render();
+      var preview =
+        card.text.length > 60 ? card.text.slice(0, 60) + "…" : card.text;
+      if (confirm('¿Eliminar la tarjeta "' + preview + '"?')) {
+        col.cards.splice(cardIndex, 1);
+        saveBoard();
+        render();
+      }
     });
     el.appendChild(delBtn);
 

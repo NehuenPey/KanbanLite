@@ -167,6 +167,7 @@ header {
     flex: 0 0 280px;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .column.drag-over-col {
