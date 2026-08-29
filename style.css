@@ -97,7 +97,7 @@ header {
     padding: 3px 6px;
     border-radius: var(--radius-sm);
     max-width: 50%;
-    width: 5dvh;
+    width: 50%;
 }
 
 #board-title:hover,
