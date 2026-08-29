@@ -99,16 +99,24 @@
   /* ---------- Render ---------- */
 
   function focusAndScrollColumn(colId) {
-    var colBody = boardEl.querySelector(
-      '.col-body[data-col-id="' + colId + '"]',
-    );
-    if (colBody) {
-      colBody.scrollTo({ top: colBody.scrollHeight, behavior: "smooth" });
-    }
     var newInput = boardEl.querySelector(
       '.column[data-col-id="' + colId + '"] .add-card-input',
     );
-    if (newInput) newInput.focus();
+    if (!newInput) return;
+
+    // Enfocamos sin dejar que el navegador haga su propio scroll automático:
+    // el teclado virtual todavía no terminó de abrirse en este instante.
+    try {
+      newInput.focus({ preventScroll: true });
+    } catch (err) {
+      newInput.focus();
+    }
+
+    // Recién ahora, un frame después (con el layout ya acomodado por el teclado),
+    // llevamos el campo a la vista de forma controlada.
+    requestAnimationFrame(function () {
+      newInput.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
   }
 
   function render() {
