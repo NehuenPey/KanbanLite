@@ -97,7 +97,7 @@ header {
     padding: 3px 6px;
     border-radius: var(--radius-sm);
     max-width: 50%;
-    width: 50%;
+    width: 5dvh;
 }
 
 #board-title:hover,
@@ -299,7 +299,7 @@ header {
     font-size: 14px;
     line-height: 1.45;
     cursor: grab;
-    touch-action: manipulation;
+    touch-action: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;

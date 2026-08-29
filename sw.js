@@ -1,4 +1,4 @@
-var CACHE_NAME = "tablero-cache-v7";
+var CACHE_NAME = "tablero-cache-v8";
 var ASSETS = [
   "./index.html",
   "./styles.css",
