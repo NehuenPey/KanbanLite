@@ -423,7 +423,9 @@
     });
   }
   function getCardAfterY(cardsWrap, y) {
-    var els = Array.prototype.slice.call(cardsWrap.querySelectorAll(".card"));
+    var els = Array.prototype.slice.call(
+      cardsWrap.querySelectorAll(".card:not(.dragging)"),
+    );
     var result = null;
     var closestOffset = -Infinity;
     els.forEach(function (child) {
@@ -435,6 +437,19 @@
       }
     });
     return result;
+  }
+  function indexAmongCards(cardsWrap, placeholder) {
+    var siblings = Array.prototype.slice.call(cardsWrap.children);
+    var count = 0;
+    for (var i = 0; i < siblings.length; i++) {
+      if (siblings[i] === placeholder) return count;
+      if (
+        siblings[i].classList.contains("card") &&
+        !siblings[i].classList.contains("dragging")
+      )
+        count++;
+    }
+    return count;
   }
 
   var edgeScrollRAF = null;
@@ -646,10 +661,7 @@
 
       if (placeholder && targetCol && fromCol) {
         var cardsWrap = placeholder.parentElement;
-        var index = Array.prototype.indexOf.call(
-          cardsWrap.children,
-          placeholder,
-        );
+        var index = indexAmongCards(cardsWrap, placeholder);
         var cardObj = fromCol.cards.find(function (c) {
           return c.id === card.id;
         });
